@@ -25,7 +25,30 @@ class EngineWrapper:
 
         # Initial UCI Handshake
         self.send_command("uci")
+        self._wait_for("uciok")
         self.send_command("isready")
+        self._wait_for("readyok")
+
+    def quit(self):
+            """Gracefully shuts down the engine and kills the process"""
+            try:
+                self.send_command("quit")
+
+                self.process.terminate()
+                self.process.wait(timeout=2)
+            except Exception as e:
+                print(f"Engine quit error, forcing kill: {e}")
+                self.process.kill()
+            finally:
+                print("Cerberus Engine process cleaned up.")
+
+    def _wait_for(self, target: str):
+        """Helper to block until a specific string is seen in stdout"""
+        while True:
+            line = self.process.stdout.readline().strip()
+            print(f"Engine Debug: {line}") # Uncomment this to see engine logs
+            if target in line:
+                break
 
     def send_command(self, command: str):
         if self.process.stdin:
@@ -79,6 +102,7 @@ async def websocket_endpoint(websocket: WebSocket, game_id: str):
 
     except WebSocketDisconnect:
         print(f"Closing connection for {game_id}")
+        engine.quit()
     finally:
         # Crucial: Kill the engine process so you don't have "zombie" engines
         engine.process.terminate()
