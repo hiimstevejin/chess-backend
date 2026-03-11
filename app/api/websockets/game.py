@@ -11,19 +11,50 @@ class ConnectionManager:
     def __init__(self):
         # Map game_id to a list of active WebSocket connections
         self.active_connections: dict[str, list[WebSocket]] = {}
+        # Track colors per game: game_id -> { color: websocket }
+        self.game_colors: dict[str, dict[str, WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, game_id: str):
+    async def connect(self, websocket: WebSocket, game_id: str, requested_color: str = None):
         await websocket.accept()
         if game_id not in self.active_connections:
             self.active_connections[game_id] = []
+            self.game_colors[game_id] = {}
+            
         self.active_connections[game_id].append(websocket)
+        
+        assigned_color = None
+        colors_taken = self.game_colors[game_id]
+        
+        if requested_color in ["w", "b"] and requested_color not in colors_taken:
+            assigned_color = requested_color
+        else:
+            if "w" not in colors_taken:
+                assigned_color = "w"
+            elif "b" not in colors_taken:
+                assigned_color = "b"
+                
+        if assigned_color:
+            self.game_colors[game_id][assigned_color] = websocket
+            # Notify the player of their assigned color
+            await websocket.send_json({
+                "type": "COLOR_ASSIGNED",
+                "color": assigned_color
+            })
 
     def disconnect(self, websocket: WebSocket, game_id: str):
         if game_id in self.active_connections:
             if websocket in self.active_connections[game_id]:
                 self.active_connections[game_id].remove(websocket)
+                
+            if game_id in self.game_colors:
+                for color, ws in list(self.game_colors[game_id].items()):
+                    if ws == websocket:
+                        del self.game_colors[game_id][color]
+
             if not self.active_connections[game_id]:
                 del self.active_connections[game_id]
+                if game_id in self.game_colors:
+                    del self.game_colors[game_id]
 
     async def broadcast(self, message: dict, game_id: str, exclude: WebSocket = None):
         if game_id in self.active_connections:
@@ -37,8 +68,8 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 @router.websocket("/{game_id}")
-async def websocket_endpoint(websocket: WebSocket, game_id: str, mode: str = "bot"):
-    await manager.connect(websocket, game_id)
+async def websocket_endpoint(websocket: WebSocket, game_id: str, mode: str = "bot", color: str = None):
+    await manager.connect(websocket, game_id, color)
     engine = None
     
     if mode == "bot":
