@@ -6,7 +6,7 @@ class Settings:
     ENGINE_EXECUTABLE: str = os.getenv("ENGINE_EXECUTABLE", "./run_bot.sh")
     PUZZLES_DB_PATH: str = os.getenv(
         "PUZZLES_DB_PATH",
-        "/root/data/puzzles.db",
+        "/Users/stevejin/Desktop/chess-backend/puzzles.db",
     )
 
 settings = Settings()
